@@ -1,7 +1,9 @@
 package com.loriscatiz.middleware;
 
+import com.auth0.jwt.interfaces.Claim;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.loriscatiz.exception.auth.ForbiddenException;
+import com.loriscatiz.exception.auth.InvalidAccessTokenException;
 import com.loriscatiz.model.Role;
 import com.loriscatiz.service.JWTService;
 import io.javalin.Javalin;
@@ -30,30 +32,49 @@ public class AuthMiddleware {
 
         app.before("/moderator/*", ctx -> {
             isUserAuthenticated(ctx);
-            Role role = ctx.attribute("role");
-
-            if (role != null && !role.equals(Role.MODERATOR) && !role.equals(Role.ADMIN)) {
-                throw new ForbiddenException();
-            }
+            isModeratorOrMore(ctx);
         });
 
         app.before("/admin/*", ctx -> {
             isUserAuthenticated(ctx);
-            Role role = ctx.attribute("role");
-
-            if (role != null && !role.equals(Role.ADMIN))
-                throw new ForbiddenException();
-
+            isAdmin(ctx);
         });
     }
 
+
     private void isUserAuthenticated(Context ctx) {
-        String authHeader = ctx.header("Authorization");
+        String accessToken = extractAccessTokenFromAuthHeader(ctx.header("Authorization"));
+        DecodedJWT decodedAccessToken = jwtService.getValidAccessToken(accessToken);
 
-        DecodedJWT jwt = jwtService.getValidAccessToken(authHeader);
+
+        ctx.attribute("username", decodedAccessToken.getSubject());
+
+        Claim roleClaim = decodedAccessToken.getClaim("role");
+        ctx.attribute("role", roleClaim.as(Role.class));
+    }
 
 
-        ctx.attribute("username", jwt.getSubject());
-        ctx.attribute("role", jwt.getClaim("role"));
+    private String extractAccessTokenFromAuthHeader(String authHeader) {
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new InvalidAccessTokenException();
+        }
+
+        return authHeader.split(" ")[1];
+
+    }
+
+    private  void isModeratorOrMore(Context ctx) {
+        Role role = ctx.attribute("role");
+        if (role != Role.ADMIN && role != Role.MODERATOR) {
+            throw new ForbiddenException();
+        }
+    }
+
+    private  void isAdmin(Context ctx) {
+        Role role = ctx.attribute("role");
+        if (role != Role.ADMIN) {
+            throw new ForbiddenException();
+        }
     }
 }

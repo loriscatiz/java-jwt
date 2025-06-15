@@ -82,14 +82,6 @@ public class AuthController {
 
 
 
-    private DecodedJWT extractAccessTokenFromAuthHeader(String authHeader) {
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new InvalidAccessTokenException();
-        }
-
-        String accessToken = authHeader.split(" ")[1];
-        return  JWT.decode(accessToken);
-    }
 }
 
