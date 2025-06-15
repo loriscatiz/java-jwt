@@ -1,29 +1,31 @@
 package com.loriscatiz.controller;
 
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.interfaces.DecodedJWT;
+import com.loriscatiz.exception.auth.InvalidAccessTokenException;
 import com.loriscatiz.exception.badrequest.InvalidRequestException;
 import com.loriscatiz.model.dto.req.auth.LoginRequest;
+import com.loriscatiz.model.dto.req.auth.RefreshRequest;
 import com.loriscatiz.model.dto.req.auth.SignUpRequest;
-import com.loriscatiz.model.dto.res.auth.JwtPayloadInput;
-import com.loriscatiz.model.dto.res.auth.LoginResponse;
+import com.loriscatiz.model.dto.internal.auth.AccessTokenPayloadInput;
+import com.loriscatiz.model.dto.res.auth.TokensResponse;
 import com.loriscatiz.model.dto.res.auth.SignupResponse;
 import com.loriscatiz.service.AuthService;
-import com.loriscatiz.service.JWTService;
 import io.javalin.Javalin;
 
 public class AuthController {
     private final Javalin app;
     private final AuthService authService;
-    private final JWTService jwtService;
 
-    public AuthController(Javalin app, AuthService authService, JWTService jwtService) {
+    public AuthController(Javalin app, AuthService authService) {
         this.app = app;
         this.authService = authService;
-        this.jwtService = jwtService;
     }
 
     public void register() {
         signUp();
         login();
+        refresh();
     }
 
     private void signUp() {
@@ -47,18 +49,47 @@ public class AuthController {
                 throw new InvalidRequestException("Missing fields in login request");
             }
 
-            JwtPayloadInput jwtPayloadInput = authService.login(request);
-
-            String refreshToken = jwtService.createRefreshToken(jwtPayloadInput);
-            String accessToken = jwtService.createAccessToken(jwtPayloadInput);
+            TokensResponse response = authService.login(request);
 
 
-            //todo: set refresh token as http only cookie
-            ctx.json(new LoginResponse(refreshToken, accessToken), LoginResponse.class);
 
-
+            ctx.json(response, TokensResponse.class);
 
 
         });
     }
+
+    private void refresh(){
+        app.post("/auth/refresh", ctx -> {
+            String refreshToken;
+
+//            if (ctx.cookie("refreshToken") != null) {
+//                refreshToken = ctx.cookie("refreshToken");
+//            } else {
+//                refreshToken = ctx.bodyAsClass(RefreshRequest.class).refreshToken();
+//            }
+            refreshToken = ctx.bodyAsClass(RefreshRequest.class).refreshToken();
+
+
+
+           TokensResponse response = authService.refresh(refreshToken);
+
+           ctx.json(response);
+
+
+        });
+    }
+
+
+
+    private DecodedJWT extractAccessTokenFromAuthHeader(String authHeader) {
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new InvalidAccessTokenException();
+        }
+
+        String accessToken = authHeader.split(" ")[1];
+        return  JWT.decode(accessToken);
+    }
 }
+

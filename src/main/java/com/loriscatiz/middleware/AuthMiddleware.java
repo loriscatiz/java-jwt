@@ -1,12 +1,7 @@
 package com.loriscatiz.middleware;
 
-import com.auth0.jwt.exceptions.AlgorithmMismatchException;
-import com.auth0.jwt.exceptions.JWTVerificationException;
-import com.auth0.jwt.exceptions.SignatureVerificationException;
-import com.auth0.jwt.exceptions.TokenExpiredException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.loriscatiz.exception.auth.ForbiddenException;
-import com.loriscatiz.exception.auth.InvalidAccessTokenException;
 import com.loriscatiz.model.Role;
 import com.loriscatiz.service.JWTService;
 import io.javalin.Javalin;
@@ -55,48 +50,10 @@ public class AuthMiddleware {
     private void isUserAuthenticated(Context ctx) {
         String authHeader = ctx.header("Authorization");
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new InvalidAccessTokenException();
-        }
+        DecodedJWT jwt = jwtService.getValidAccessToken(authHeader);
 
-        String accessToken = authHeader.split(" ")[1];
-        DecodedJWT jwt;
 
-        try {
-            jwt = jwtService.validateToken(accessToken);
-        }
-        catch (TokenExpiredException e) {
-            throw new InvalidAccessTokenException("Access token has expired", e);
-        }
-        catch (AlgorithmMismatchException e) {
-            throw new InvalidAccessTokenException("Token algorithm mismatch", e);
-        }
-        catch (SignatureVerificationException e) {
-            throw new InvalidAccessTokenException("Invalid token signature", e);
-        }
-        catch (JWTVerificationException e) {
-            throw new InvalidAccessTokenException(InvalidAccessTokenException.DEFAULT_MESSAGE, e);
-        }
-        String username = jwt.getSubject();
-        if (username == null || username.isBlank()) {
-            throw new InvalidAccessTokenException("username is missing");
-        }
-
-        String roleClaim = jwt.getClaim("role").asString();
-
-        if (roleClaim == null) {
-            throw new InvalidAccessTokenException("role is missing");
-        }
-
-        Role role;
-        try {
-            role = Role.valueOf(roleClaim);
-        }
-        catch (IllegalArgumentException e) {
-            throw new InvalidAccessTokenException("role is invalid");
-        }
-
-        ctx.attribute("username", username);
-        ctx.attribute("role", role);
+        ctx.attribute("username", jwt.getSubject());
+        ctx.attribute("role", jwt.getClaim("role"));
     }
 }
